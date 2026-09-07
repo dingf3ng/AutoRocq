@@ -212,6 +212,7 @@ def extract_essential_proof_content(
         if proof is not None and file_context is not None and file_path is not None:
             structured_terms = _structured_dependencies(proof, file_context, file_path)
         else:
+            # Collect missing context information for logging
             missing = [
                 name
                 for name, value in (
@@ -225,7 +226,7 @@ def extract_essential_proof_content(
             # half-loaded CoqInterface would degrade without a trace.
             logger.warning(
                 "Rocq-parsed context unavailable (%s missing); falling back to "
-                "regex declaration scanning, which misses many declaration forms",
+                "regex declaration scanning, which might miss declaration forms",
                 ", ".join(missing),
             )
 
