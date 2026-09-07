@@ -180,6 +180,9 @@ def extract_essential_proof_content(
                     current_def_lines = []
 
         # Step 2: Find the theorem and extract its direct dependencies
+        # TODO: only handles files with exactly one Theorem/Lemma. Every Why3
+        # goal file has one, so the first match is the target. A file with
+        # helper lemmas above the goal would lock onto the wrong one.
         theorem_found = False
         theorem_dependencies = set()
         theorem_name = None
@@ -288,6 +291,9 @@ def extract_essential_proof_content(
                     added_definitions.add(def_name)
 
         # Add the theorem and proof
+        # TODO: same one-theorem assumption as Step 2 -- this emits the first
+        # Theorem/Lemma and everything after it, so helper lemmas would come
+        # along with their finished proofs and nothing would be trimmed.
         essential_content.append("")
         for i, line in enumerate(lines):
             line_stripped = line.strip()
