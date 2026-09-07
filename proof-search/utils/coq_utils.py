@@ -8,10 +8,16 @@ from enum import Enum
 from pathlib import Path
 
 
+# Fallback for files CoqPyt could not parse; _structured_dependencies handles
+# the normal path. Common forms only, not the vernacular: Ltac, Let, Program,
+# Notation, Coercion, mutual "with" bodies, the later names in a multi-binder
+# Parameters, and Inductive constructors are all missed.
 DECLARATION_PATTERN = re.compile(
-    r"^(?:(?:Local|Global|Polymorphic|Monomorphic)\s+)*"
+    r"^(?:#\[[^\]]*\]\s*)*"
+    r"(?:(?:Local|Global|Polymorphic|Monomorphic)\s+)*"
     r"(?:Definition|Parameter|Parameters|Axiom|Axioms|Inductive|CoInductive|"
-    r"Record|Structure|Variant|Fixpoint|CoFixpoint|Class|Instance)\s+"
+    r"Record|Structure|Variant|Fixpoint|CoFixpoint|Class|Instance|"
+    r"Theorem|Lemma|Corollary|Proposition|Remark|Fact)\s+"
     r"([A-Za-z_][A-Za-z0-9_']*)\b"
 )
 
@@ -176,11 +182,14 @@ def extract_essential_proof_content(
         # Step 2: Find the theorem and extract its direct dependencies
         theorem_found = False
         theorem_dependencies = set()
+        theorem_name = None
 
         for i, line in enumerate(lines):
             line_stripped = line.strip()
             if line_stripped.startswith(('Theorem ', 'Lemma ')):
                 theorem_found = True
+                declaration = DECLARATION_PATTERN.match(line_stripped)
+                theorem_name = declaration.group(1) if declaration else None
                 # Collect the complete theorem statement
                 theorem_lines = []
                 j = i
@@ -202,12 +211,32 @@ def extract_essential_proof_content(
         structured_terms = None
         if proof is not None and file_context is not None and file_path is not None:
             structured_terms = _structured_dependencies(proof, file_context, file_path)
+        else:
+            missing = [
+                name
+                for name, value in (
+                    ("proof", proof),
+                    ("file_context", file_context),
+                    ("file_path", file_path),
+                )
+                if value is None
+            ]
+            # The caller passes all three as getattr(..., None), so a
+            # half-loaded CoqInterface would degrade without a trace.
+            logger.warning(
+                "Rocq-parsed context unavailable (%s missing); falling back to "
+                "regex declaration scanning, which misses many declaration forms",
+                ", ".join(missing),
+            )
 
         if structured_terms is None:
             # The text fallback cannot distinguish imported globals and local
             # binders. Only names known to be local declarations are useful for
             # constructing this file's dependency closure.
             theorem_dependencies.intersection_update(all_definitions)
+            # The pattern matches Theorem/Lemma, so the goal is in
+            # all_definitions and would print twice.
+            theorem_dependencies.discard(theorem_name)
             needed_definitions = find_transitive_dependencies(
                 theorem_dependencies, all_definitions
             )
